@@ -9,4 +9,4 @@ RUN /usr/local/bin/python -m pip install --upgrade pip
 RUN /usr/local/bin/python -m pip install -e .
 RUN which c2c
 
-CMD ["/usr/local/bin/c2c","-i","https://iam.cloud.ibm.com/identity/token"]
+CMD ["/usr/local/bin/c2c"]
