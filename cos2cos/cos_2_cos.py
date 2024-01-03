@@ -3,7 +3,21 @@ import logging
 from os import environ
 from flask import Flask, request, abort
 from cos import CloudObjectStorage, COSError
+import json
+import sys
 
+accounts = environ.get('KEEP_ACCOUNTS')
+if not accounts:
+    logging.error('No valid KEEP_ACCOUNTS')
+    sys.exit(1)
+accounts = accounts.split(",")
+
+def filter_on_account(record):
+    account_id = record.get("account_id")
+    if account_id in accounts:
+        return True
+    return False
+    
 class FileHandler():
     def __init__(self, src_cos_client, des_cos_client,source_bucket, destination_bucket, file):
         self.src_cos_client = src_cos_client
@@ -18,14 +32,31 @@ class FileHandler():
             file=self.file)
 
         logging.info('File downloaded')
-        logging.info('Uploading file %s to COS bucket %s',
-                     self.file, self.destination_bucket)
 
-        self.des_cos_client.put_file(
-            bucket_name=self.destination_bucket,
-            file=self.file)
+        filtered = False
+        with open(self.file, 'r') as ims_file:
+            record = json.load(ims_file)
+            data = record["data"]
+            filtered_data = list(filter(filter_on_account, data))
+            if len(data) != len(filtered_data):
+                filtered = True
+                record["data"] = filtered_data
 
-        logging.info('Upload complete')
+        if filtered:
+            with open(self.file, 'w') as file:
+                file.write(json.dumps(record))
+        
+        if len(record["data"]) > 0:
+            logging.info('Uploading file %s to COS bucket %s',
+                        self.file, self.destination_bucket)
+
+            self.des_cos_client.put_file(
+                bucket_name=self.destination_bucket,
+                file=self.file)
+
+            logging.info('Upload complete')
+        else:
+             logging.info('Nothing to upload')
 
 
 def create_server(src_cos_client=None, des_cos_client=None,destination_bucket=None, source_bucket=None):
